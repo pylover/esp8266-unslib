@@ -1,0 +1,13 @@
+# C
+*.o
+
+.output
+
+# vim
+.*.sw[po]
+.ropeproject
+
+# Project specific
+tests/test_*
+tests/tempfile.bin
+!tests/*.c
