@@ -10,22 +10,8 @@
 
 static struct espconn conn;
 static const char * hostname;
-
-/*
- * Packet Layout:
- * 1    uint8    Verb
- * n    optional
- */
-
-/* 1: Discover Verb
- *
- * Request:
- * n    str   hostname(pattern)
- *
- * Response:
- * n    str   hostname
- * n    str   services
- */
+static struct ip_info ipconfig;
+static ip_addr_t igmpaddr;
 
 
 #define MIN(x, y) ((x) < (y))? (x): (y)
@@ -44,6 +30,7 @@ void uns_req_discover(char *pattern, uint16_t len, remot_info *remoteinfo) {
     os_sprintf(resp, "%s "UNS_SERVICES, hostname);
     
     /* Send Back */
+    DEBUG("Response: %s\r\n", resp);
     os_memcpy(conn.proto.udp->remote_ip, remoteinfo->remote_ip, 4);
     conn.proto.udp->remote_port = remoteinfo->remote_port;
     espconn_sent(&conn, resp, strlen(resp));
@@ -80,8 +67,6 @@ void uns_recv(void *arg, char *data, uint16_t length) {
 ICACHE_FLASH_ATTR 
 int8_t uns_init(const char * name) {
     int8_t err;
-    struct ip_info ipconfig;
-    ip_addr_t igmpaddr;
     hostname = name;
     conn.type = ESPCONN_UDP;
 
@@ -112,4 +97,10 @@ int8_t uns_init(const char * name) {
     return ESPCONN_OK;
 }
 
-
+ICACHE_FLASH_ATTR 
+int8_t uns_deinit() {
+    free(conn.proto.udp);
+    espconn_igmp_leave(&ipconfig.ip, &igmpaddr);
+    espconn_delete(&conn); 
+}
+ 
