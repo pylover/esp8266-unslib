@@ -1,10 +1,10 @@
-#ifndef UNS_SERVER_H
-#define UNS_SERVER_H
+#ifndef UNS_H
+#define UNS_H
 
 #include <c_types.h>
 
-#define IGMP_ADDR   "224.0.0.77"
-#define IGMP_PORT   5333
+#define UNS_IGMP_ADDR   "224.0.0.77"
+#define UNS_IGMP_PORT   5333
 
 #ifndef UNS_SERVICES
 #define UNS_SERVICES "u5333"
@@ -19,6 +19,7 @@ typedef enum {
 } unsverb_t;
 
 
-int8_t uns_init(const char * name);
+int8_t uns_init(const char *zone, const char *name);
+int8_t uns_deinit();
 
 #endif

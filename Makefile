@@ -37,7 +37,7 @@ endif
 # Required for each makefile to inherit from the parent
 #
 
-INCLUDES := $(INCLUDES) -I $(PDIR)/unslib/include
+INCLUDES := $(INCLUDES)
 INCLUDES += -I.
 PDIR := ../$(PDIR)
 sinclude $(PDIR)Makefile

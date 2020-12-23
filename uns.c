@@ -1,7 +1,7 @@
-#include "uns_server.h"
-#include "debug.h"
+#include "uns.h"
 
 #include <mem.h>
+#include <osapi.h>
 #include <c_types.h>
 #include <ip_addr.h>
 #include <espconn.h>
@@ -9,7 +9,7 @@
 
 
 static struct espconn conn;
-static const char * hostname;
+static char hostname[162];
 static struct ip_info ipconfig;
 static ip_addr_t igmpaddr;
 
@@ -30,7 +30,6 @@ void uns_req_discover(char *pattern, uint16_t len, remot_info *remoteinfo) {
     os_sprintf(resp, "%s "UNS_SERVICES, hostname);
     
     /* Send Back */
-    DEBUG("Response: %s\r\n", resp);
     os_memcpy(conn.proto.udp->remote_ip, remoteinfo->remote_ip, 4);
     conn.proto.udp->remote_port = remoteinfo->remote_port;
     espconn_sent(&conn, resp, strlen(resp));
@@ -46,7 +45,7 @@ void uns_recv(void *arg, char *data, uint16_t length) {
         /* Remote info problem */
         return;
     }
-    DEBUG("Packet from: "IPSTR":%d len: %d\r\n", 
+    os_printf("Packet from: "IPSTR":%d len: %d\r\n", 
             IP2STR(remoteinfo->remote_ip),
             remoteinfo->remote_port,
             length
@@ -54,7 +53,7 @@ void uns_recv(void *arg, char *data, uint16_t length) {
 
     if (length < 1) {
         /* Malformed request, Just ignoring */
-        DEBUG("Malformed IGMP packet: %d Bytes\r\n", length);
+        os_printf("Malformed IGMP packet: %d Bytes\r\n", length);
         return;
     }
 
@@ -65,14 +64,14 @@ void uns_recv(void *arg, char *data, uint16_t length) {
 
 
 ICACHE_FLASH_ATTR 
-int8_t uns_init(const char * name) {
+int8_t uns_init(const char *zone, const char *name) {
     int8_t err;
-    hostname = name;
+    os_sprintf(hostname, "%s.%s", zone, name);
     conn.type = ESPCONN_UDP;
 
     // TODO: Free
     conn.proto.udp = (esp_udp *)os_zalloc(sizeof(esp_udp));
-    conn.proto.udp->local_port = IGMP_PORT;
+    conn.proto.udp->local_port = UNS_IGMP_PORT;
 
     err = espconn_regist_recvcb(&conn, uns_recv);
     if (err) {
@@ -85,10 +84,7 @@ int8_t uns_init(const char * name) {
     }
     
     wifi_get_ip_info(STATION_IF, &ipconfig);
-    DEBUG("Host IP Address: "IPSTR"\r\n", IP2STR(&ipconfig.ip));
-    
-    ipaddr_aton(IGMP_ADDR, &igmpaddr);
-    DEBUG("IGMP Address: "IPSTR"\r\n", IP2STR(&igmpaddr));
+    ipaddr_aton(UNS_IGMP_ADDR, &igmpaddr);
 
     err = espconn_igmp_join(&ipconfig.ip, &igmpaddr);
     if (err) {
@@ -97,10 +93,11 @@ int8_t uns_init(const char * name) {
     return ESPCONN_OK;
 }
 
+
 ICACHE_FLASH_ATTR 
 int8_t uns_deinit() {
-    free(conn.proto.udp);
+    os_free(conn.proto.udp);
     espconn_igmp_leave(&ipconfig.ip, &igmpaddr);
-    espconn_delete(&conn); 
+    return espconn_delete(&conn); 
 }
  
