@@ -26,6 +26,7 @@ def createsocket():
     """Create a udp socket for IGMP multicast."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 32)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
     return sock
 
@@ -55,6 +56,9 @@ class Read(cli.SubCommand):
 
     def __call__(self, args):
         sock = createsocket()
+        sock.bind(TARGET)
+        mreq = struct.pack("4sl", socket.inet_aton(GRP), socket.INADDR_ANY)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
         while True:
             data, host = sock.recvfrom(256)
             print(f'{host}: {data.decode()}')
