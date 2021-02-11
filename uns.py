@@ -44,6 +44,9 @@ class Discover(cli.SubCommand):
         sock = createsocket()
         discover = struct.pack('>B', VERB_DISCOVER)
         sock.sendto(discover + args.hostname.encode(), TARGET)
+        while True:
+            data, host = sock.recvfrom(256)
+            print(f'{host}: {data.decode()}')
 
 
 class Read(cli.SubCommand):
