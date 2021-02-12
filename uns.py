@@ -17,7 +17,7 @@ __version__ = '0.1.0'
 VERB_DISCOVER = 1
 
 
-GRP = '224.0.0.77'
+GRP = '224.0.0.70'
 PORT = 5333
 TARGET = (GRP, PORT)
 
@@ -37,16 +37,20 @@ class Discover(cli.SubCommand):
     __command__ = 'discover'
     __aliases__ = ['d', 's']
     __arguments__ = [
-        cli.Argument('hostname')
+        cli.Argument('hostname'),
+        cli.Argument('-w', '--wait', action='store_true',
+                     help='Wait for response')
     ]
 
     def __call__(self, args):
         sock = createsocket()
+        print(f'Sending {args.hostname} to {GRP}:{PORT}')
         discover = struct.pack('>B', VERB_DISCOVER)
         sock.sendto(discover + args.hostname.encode(), TARGET)
-        while True:
-            data, host = sock.recvfrom(256)
-            print(f'{host}: {data.decode()}')
+        if args.wait:
+            while True:
+                data, host = sock.recvfrom(256)
+                print(f'{host}: {data.decode()}')
 
 
 class Read(cli.SubCommand):
@@ -59,6 +63,7 @@ class Read(cli.SubCommand):
 
     def __call__(self, args):
         sock = createsocket()
+        print(f'Listening to {GRP}:{PORT}')
         sock.bind(TARGET)
         mreq = struct.pack("4sl", socket.inet_aton(GRP), socket.INADDR_ANY)
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)

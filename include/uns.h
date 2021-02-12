@@ -26,12 +26,8 @@ typedef enum {
 } unsverb_t;
 
 
-typedef void (*uns_callback)(char* hostname, int hostnamelen, 
-        char* services, int serviceslen, remot_info*);
-
 // TODO: Errors; err_t
 int8_t uns_init(const char *zone, const char *name);
-int8_t uns_discover(const char*zone, const char *name, uns_callback);
 int8_t uns_deinit();
 
 #endif
