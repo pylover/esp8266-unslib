@@ -88,7 +88,7 @@ class Read(cli.SubCommand):
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
         while True:
             data, host = sock.recvfrom(256)
-            print(f'{host}: {data.decode()}')
+            print(f'{host}: {data[1:].decode()}')
 
 
 class UNS(cli.Root):

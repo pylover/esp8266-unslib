@@ -7,49 +7,82 @@
 #include <espconn.h>
 #include <user_interface.h>
 
-
 static struct espconn conn;
-static char hostname[UNS_HOSTNAME_MAXLEN];
+static char myhostname[UNS_HOSTNAME_MAXLEN];
 static struct ip_info ipconfig;
 static ip_addr_t igmpaddr;
 static uns_callback callback;
+static struct unsrecord hostcache[UNS_MAX_HOST_CACHE];
+static uint8_t cache_lastindex;
 
-struct uns_record {
-    char fullname[UNS_HOSTNAME_MAXLEN];
-    struct ip_info address;
-};
+
+#define cache_previtem(i) abs((cache_lastindex - i) % UNS_MAX_HOST_CACHE)
+#define cache_nextitem(i) abs((cache_lastindex + i) % UNS_MAX_HOST_CACHE)
 
 
 static ICACHE_FLASH_ATTR 
-void _answer(char *pattern, uint16_t len, remot_info *remoteinfo) {
-    char *fullname = pattern;
-    char *temp;
-    int hostnamelen;
+struct unsrecord * _cachefind(const char *name, uint16_t len) {
+    uint8_t i;
+    uint8_t index;
 
-    temp = os_strstr(pattern, " ");
-    if (temp == NULL){
-        // Invalid Packet
-        os_printf("Invalid packet, ignoring\n");
-        return;
+    for (i = 0; i < UNS_MAX_HOST_CACHE; i++) {
+        index = cache_previtem(i);
+        if (os_strncmp(hostcache[i].fullname, name, len)) {
+            continue;
+        }
+        return &hostcache[i];
+    }
+    return NULL;
+}
+
+
+static ICACHE_FLASH_ATTR 
+struct unsrecord * _cachestore(char *name, uint16_t len, 
+        struct ip_addr* addr) {
+    struct unsrecord *rec = &hostcache[cache_nextitem(1)];
+    os_sprintf(rec->fullname, name, len);
+    rec->address.addr = addr->addr;
+    os_printf("Cache stored: %s\n", name);
+    return rec; 
+}
+
+
+static ICACHE_FLASH_ATTR 
+void _answer(char *hostname, uint16_t len, remot_info *remoteinfo) {
+    hostname[len] = 0;
+
+    os_printf("Answer: %s\n", hostname);
+    
+    struct unsrecord *r = _cachefind(hostname, len);
+    if (r) {
+        os_memcpy(&r->address, remoteinfo->remote_ip, 4);
+        //r->address.addr = ((ip_addr_t *)remoteinfo->remote_ip)->addr;
+    }
+    else {
+        r = _cachestore(hostname, len, (ip_addr_t *)remoteinfo->remote_ip);
     }
 
-    os_printf("Answer: %s\n", pattern);
-    hostnamelen = temp - fullname;
-    fullname[hostnamelen] = 0;
-
     if (callback) {
-        callback(fullname, hostnamelen, remoteinfo);
+        callback(r);
         callback = NULL;
     }
 }
 
 
 ICACHE_FLASH_ATTR 
-err_t uns_discover(const char*zone, const char *name, uns_callback cb) {
+err_t uns_discover(const char *hostname, uns_callback cb) {
     err_t err;
     char req[UNS_REQUEST_BUFFER_SIZE];
     req[0] = UNS_VERB_DISCOVER;
-    os_sprintf(req + 1, "%s.%s", zone, name);
+    int hostnamelen = os_strlen(hostname);
+    os_strcpy(req + 1, hostname);
+    
+    /* Try current cache items. */
+    struct unsrecord *r = _cachefind(hostname, hostnamelen);
+    if (r) {
+        cb(r);
+        return;
+    }
 
     /* Update callback pointer, and ignore previous data */
     callback = cb;
@@ -68,7 +101,7 @@ err_t uns_discover(const char*zone, const char *name, uns_callback cb) {
 
 static ICACHE_FLASH_ATTR
 void _req_discover(char *pattern, uint16_t len, remot_info *remoteinfo) {
-    if (os_strncmp(hostname, pattern, len)) {
+    if (os_strncmp(myhostname, pattern, len)) {
         /* Ignore, It's not me */
         return;
     }
@@ -77,12 +110,14 @@ void _req_discover(char *pattern, uint16_t len, remot_info *remoteinfo) {
     /* Create Response */
     char resp[UNS_RESPONSE_BUFFER_SIZE];
     os_memset(resp, 0, UNS_RESPONSE_BUFFER_SIZE);
-    os_sprintf(resp, "%s", hostname);
+    resp[0] = UNS_VERB_ANSWER;
+    int resplen = os_sprintf(resp + 1, "%s", myhostname);
     
     /* Send Back */
     os_memcpy(conn.proto.udp->remote_ip, remoteinfo->remote_ip, 4);
     conn.proto.udp->remote_port = remoteinfo->remote_port;
-    espconn_sent(&conn, resp, strlen(resp));
+    os_printf("Sending: %s to "IPSTR"\n", resp, IP2STR(remoteinfo->remote_ip));
+    espconn_sent(&conn, resp, resplen + 1);
 }
 
 
@@ -117,9 +152,9 @@ void _recv(void *arg, char *data, uint16_t length) {
 
 
 ICACHE_FLASH_ATTR 
-err_t uns_init(const char *zone, const char *name) {
+err_t uns_init(const char *hostname) {
     err_t err;
-    os_sprintf(hostname, "%s.%s", zone, name);
+    os_strcpy(myhostname, hostname);
     conn.type = ESPCONN_UDP;
     conn.state = ESPCONN_NONE;
     conn.proto.udp = (esp_udp *)os_zalloc(sizeof(esp_udp));

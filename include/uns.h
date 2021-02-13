@@ -20,6 +20,10 @@
 #define UNS_HOSTNAME_MAXLEN     66
 #endif
 
+#ifndef UNS_MAX_HOST_CACHE
+#define UNS_MAX_HOST_CACHE      8
+#endif
+
 
 typedef enum {
     UNS_VERB_DISCOVER = 1,
@@ -27,12 +31,18 @@ typedef enum {
 } unsverb_t;
 
 
-typedef void (*uns_callback)(char* hostname, int hostnamelen, remot_info*);
+struct unsrecord {
+    char fullname[UNS_HOSTNAME_MAXLEN];
+    struct ip_addr address;
+};
+
+
+typedef void (*uns_callback)(struct unsrecord*);
 
 
 // TODO: Errors; err_t
-err_t uns_init(const char *zone, const char *name);
-err_t uns_discover(const char*zone, const char *name, uns_callback);
+err_t uns_init(const char *hostname);
+err_t uns_discover(const char *hostname, uns_callback);
 err_t uns_deinit();
-
+err_t uns_invalidate(const char *hostname);
 #endif
