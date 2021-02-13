@@ -15,6 +15,7 @@ __version__ = '0.1.0'
 
 # UNS verbs
 VERB_DISCOVER = 1
+VERB_ANSWER = 2
 
 
 GRP = '224.0.0.70'
@@ -29,6 +30,25 @@ def createsocket():
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
     return sock
+
+
+class Answer(cli.SubCommand):
+    """Answer command line interface."""
+
+    __command__ = 'answer'
+    __aliases__ = ['a', 'ans']
+    __arguments__ = [
+        cli.Argument('-s', '--services', action='append', default=['u5333']),
+        cli.Argument('hostname'),
+        cli.Argument('address'),
+    ]
+
+    def __call__(self, args):
+        sock = createsocket()
+        answer = f'{args.hostname} {" ".join(args.services)}'
+        print(f'Answering {answer} to {args.address}')
+        verb = struct.pack('>B', VERB_ANSWER)
+        sock.sendto(verb + answer.encode(), TARGET)
 
 
 class Discover(cli.SubCommand):
@@ -81,6 +101,7 @@ class UNS(cli.Root):
         cli.Argument('-v', '--version', action='store_true'),
         Discover,
         Read,
+        Answer,
     ]
 
     def __call__(self, args):

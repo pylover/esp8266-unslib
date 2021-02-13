@@ -12,9 +12,71 @@ static struct espconn conn;
 static char hostname[162];
 static struct ip_info ipconfig;
 static ip_addr_t igmpaddr;
+static uns_callback callback;
 
 
 #define MIN(x, y) ((x) < (y))? (x): (y)
+
+
+#define IP_FMT    "%d.%d.%d.%d"
+#define IPPORT_FMT    IP_FMT":%d"
+#define unpack_ip(ip) ip[0], ip[1], ip[2], ip[3]
+#define lclinfo(t) unpack_ip((t)->local_ip), (t)->local_port
+#define rmtinfo(t) unpack_ip((t)->remote_ip), (t)->remote_port
+
+
+static ICACHE_FLASH_ATTR 
+void uns_answer(char *pattern, uint16_t len, remot_info *remoteinfo) {
+    char *hostname = pattern;
+    char *services;
+    char *temp;
+    int hostnamelen;
+    int serviceslen;
+
+    temp = os_strstr(pattern, " ");
+    if (temp == NULL){
+        // Invalid Packet
+        os_printf("Invalid packet, ignoring\n");
+        return;
+    }
+
+    os_printf("Answer: %s\n", pattern);
+    hostnamelen = temp - hostname;
+    hostname[hostnamelen] = 0;
+    services = temp + 1;
+
+    serviceslen = len - (services - hostname);
+    services[serviceslen] = 0;
+    if (callback) {
+        callback(hostname, hostnamelen, services, serviceslen, remoteinfo);
+        callback = NULL;
+    }
+}
+
+
+ICACHE_FLASH_ATTR 
+int8_t uns_discover(const char*zone, const char *name, uns_callback cb) {
+    err_t err;
+    char req[UNS_REQUEST_BUFFER_SIZE];
+    req[0] = UNS_VERB_DISCOVER;
+    os_sprintf(req + 1, "%s.%s", zone, name);
+
+    /* Update callback pointer, and ignore previous data */
+    callback = cb;
+
+    /* Send discover packet */
+    //os_memcpy(conn.proto.udp->local_ip, &ipconfig, 4);
+    //conn.proto.udp->local_port = UNS_IGMP_PORT;
+    os_memcpy(conn.proto.udp->remote_ip, &igmpaddr, 4);
+    conn.proto.udp->remote_port = UNS_IGMP_PORT;
+    os_printf("Sending: %s, to: "IPPORT_FMT"\n", req, rmtinfo(conn.proto.udp));
+    os_printf("From: "IPPORT_FMT"\n", lclinfo(conn.proto.udp));
+    err = espconn_sent(&conn, req, strlen(req));
+    if(err) {
+        os_printf("Cannot send UDP: %d\n", err);
+    }
+    return OK; 
+}
 
 
 static ICACHE_FLASH_ATTR
@@ -60,6 +122,9 @@ void uns_recv(void *arg, char *data, uint16_t length) {
 
     if (data[0] == UNS_VERB_DISCOVER) {
         uns_req_discover(data + 1, length - 1, remoteinfo);
+    }
+    else if (data[0] == UNS_VERB_ANSWER) {
+        uns_answer(data + 1, length - 1, remoteinfo);
     }
 }
 
