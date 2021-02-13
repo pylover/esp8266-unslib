@@ -31,8 +31,8 @@ typedef void (*uns_callback)(char* hostname, int hostnamelen,
 
 
 // TODO: Errors; err_t
-int8_t uns_init(const char *zone, const char *name);
-int8_t unc_discover(const char*zone, const char *name, uns_callback);
-int8_t uns_deinit();
+err_t uns_init(const char *zone, const char *name);
+err_t uns_discover(const char*zone, const char *name, uns_callback);
+err_t uns_deinit();
 
 #endif

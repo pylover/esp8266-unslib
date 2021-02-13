@@ -18,16 +18,9 @@ static uns_callback callback;
 #define MIN(x, y) ((x) < (y))? (x): (y)
 
 
-#define IP_FMT    "%d.%d.%d.%d"
-#define IPPORT_FMT    IP_FMT":%d"
-#define unpack_ip(ip) ip[0], ip[1], ip[2], ip[3]
-#define lclinfo(t) unpack_ip((t)->local_ip), (t)->local_port
-#define rmtinfo(t) unpack_ip((t)->remote_ip), (t)->remote_port
-
-
 static ICACHE_FLASH_ATTR 
 void uns_answer(char *pattern, uint16_t len, remot_info *remoteinfo) {
-    char *hostname = pattern;
+    char *fullname = pattern;
     char *services;
     char *temp;
     int hostnamelen;
@@ -41,21 +34,21 @@ void uns_answer(char *pattern, uint16_t len, remot_info *remoteinfo) {
     }
 
     os_printf("Answer: %s\n", pattern);
-    hostnamelen = temp - hostname;
-    hostname[hostnamelen] = 0;
+    hostnamelen = temp - fullname;
+    fullname[hostnamelen] = 0;
     services = temp + 1;
 
-    serviceslen = len - (services - hostname);
+    serviceslen = len - (services - fullname);
     services[serviceslen] = 0;
     if (callback) {
-        callback(hostname, hostnamelen, services, serviceslen, remoteinfo);
+        callback(fullname, hostnamelen, services, serviceslen, remoteinfo);
         callback = NULL;
     }
 }
 
 
 ICACHE_FLASH_ATTR 
-int8_t uns_discover(const char*zone, const char *name, uns_callback cb) {
+err_t uns_discover(const char*zone, const char *name, uns_callback cb) {
     err_t err;
     char req[UNS_REQUEST_BUFFER_SIZE];
     req[0] = UNS_VERB_DISCOVER;
@@ -65,15 +58,12 @@ int8_t uns_discover(const char*zone, const char *name, uns_callback cb) {
     callback = cb;
 
     /* Send discover packet */
-    //os_memcpy(conn.proto.udp->local_ip, &ipconfig, 4);
-    //conn.proto.udp->local_port = UNS_IGMP_PORT;
     os_memcpy(conn.proto.udp->remote_ip, &igmpaddr, 4);
     conn.proto.udp->remote_port = UNS_IGMP_PORT;
-    os_printf("Sending: %s, to: "IPPORT_FMT"\n", req, rmtinfo(conn.proto.udp));
-    os_printf("From: "IPPORT_FMT"\n", lclinfo(conn.proto.udp));
     err = espconn_sent(&conn, req, strlen(req));
     if(err) {
         os_printf("Cannot send UDP: %d\n", err);
+        return err;
     }
     return OK; 
 }
@@ -130,8 +120,8 @@ void uns_recv(void *arg, char *data, uint16_t length) {
 
 
 ICACHE_FLASH_ATTR 
-int8_t uns_init(const char *zone, const char *name) {
-    int8_t err;
+err_t uns_init(const char *zone, const char *name) {
+    err_t err;
     os_sprintf(hostname, "%s.%s", zone, name);
     conn.type = ESPCONN_UDP;
     conn.state = ESPCONN_NONE;
@@ -160,7 +150,7 @@ int8_t uns_init(const char *zone, const char *name) {
 
 
 ICACHE_FLASH_ATTR 
-int8_t uns_deinit() {
+err_t uns_deinit() {
     espconn_igmp_leave(&ipconfig.ip, &igmpaddr);
     os_free(conn.proto.udp);
     return espconn_delete(&conn); 
