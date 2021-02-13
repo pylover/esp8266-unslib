@@ -8,10 +8,6 @@
 #define UNS_IGMP_ADDR   "224.0.0.70"
 #define UNS_IGMP_PORT   5333
 
-#ifndef UNS_SERVICES
-#define UNS_SERVICES "u5333"
-#endif
-
 #ifndef UNS_RESPONSE_BUFFER_SIZE
 #define UNS_RESPONSE_BUFFER_SIZE    0xff
 #endif
@@ -20,14 +16,18 @@
 #define UNS_REQUEST_BUFFER_SIZE     0xff
 #endif
 
+#ifndef UNS_HOSTNAME_MAXLEN
+#define UNS_HOSTNAME_MAXLEN     66
+#endif
+
+
 typedef enum {
     UNS_VERB_DISCOVER = 1,
     UNS_VERB_ANSWER = 2
 } unsverb_t;
 
 
-typedef void (*uns_callback)(char* hostname, int hostnamelen, 
-        char* services, int serviceslen, remot_info*);
+typedef void (*uns_callback)(char* hostname, int hostnamelen, remot_info*);
 
 
 // TODO: Errors; err_t

@@ -9,22 +9,22 @@
 
 
 static struct espconn conn;
-static char hostname[162];
+static char hostname[UNS_HOSTNAME_MAXLEN];
 static struct ip_info ipconfig;
 static ip_addr_t igmpaddr;
 static uns_callback callback;
 
-
-#define MIN(x, y) ((x) < (y))? (x): (y)
+struct uns_record {
+    char fullname[UNS_HOSTNAME_MAXLEN];
+    struct ip_info address;
+};
 
 
 static ICACHE_FLASH_ATTR 
-void uns_answer(char *pattern, uint16_t len, remot_info *remoteinfo) {
+void _answer(char *pattern, uint16_t len, remot_info *remoteinfo) {
     char *fullname = pattern;
-    char *services;
     char *temp;
     int hostnamelen;
-    int serviceslen;
 
     temp = os_strstr(pattern, " ");
     if (temp == NULL){
@@ -36,12 +36,9 @@ void uns_answer(char *pattern, uint16_t len, remot_info *remoteinfo) {
     os_printf("Answer: %s\n", pattern);
     hostnamelen = temp - fullname;
     fullname[hostnamelen] = 0;
-    services = temp + 1;
 
-    serviceslen = len - (services - fullname);
-    services[serviceslen] = 0;
     if (callback) {
-        callback(fullname, hostnamelen, services, serviceslen, remoteinfo);
+        callback(fullname, hostnamelen, remoteinfo);
         callback = NULL;
     }
 }
@@ -70,7 +67,7 @@ err_t uns_discover(const char*zone, const char *name, uns_callback cb) {
 
 
 static ICACHE_FLASH_ATTR
-void uns_req_discover(char *pattern, uint16_t len, remot_info *remoteinfo) {
+void _req_discover(char *pattern, uint16_t len, remot_info *remoteinfo) {
     if (os_strncmp(hostname, pattern, len)) {
         /* Ignore, It's not me */
         return;
@@ -80,7 +77,7 @@ void uns_req_discover(char *pattern, uint16_t len, remot_info *remoteinfo) {
     /* Create Response */
     char resp[UNS_RESPONSE_BUFFER_SIZE];
     os_memset(resp, 0, UNS_RESPONSE_BUFFER_SIZE);
-    os_sprintf(resp, "%s "UNS_SERVICES, hostname);
+    os_sprintf(resp, "%s", hostname);
     
     /* Send Back */
     os_memcpy(conn.proto.udp->remote_ip, remoteinfo->remote_ip, 4);
@@ -90,7 +87,7 @@ void uns_req_discover(char *pattern, uint16_t len, remot_info *remoteinfo) {
 
 
 static ICACHE_FLASH_ATTR
-void uns_recv(void *arg, char *data, uint16_t length) {
+void _recv(void *arg, char *data, uint16_t length) {
     remot_info *remoteinfo = NULL;
 
     struct espconn *c = (struct espconn*) arg;
@@ -111,10 +108,10 @@ void uns_recv(void *arg, char *data, uint16_t length) {
     }
 
     if (data[0] == UNS_VERB_DISCOVER) {
-        uns_req_discover(data + 1, length - 1, remoteinfo);
+        _req_discover(data + 1, length - 1, remoteinfo);
     }
     else if (data[0] == UNS_VERB_ANSWER) {
-        uns_answer(data + 1, length - 1, remoteinfo);
+        _answer(data + 1, length - 1, remoteinfo);
     }
 }
 
@@ -128,7 +125,7 @@ err_t uns_init(const char *zone, const char *name) {
     conn.proto.udp = (esp_udp *)os_zalloc(sizeof(esp_udp));
     conn.proto.udp->local_port = UNS_IGMP_PORT;
 
-    err = espconn_regist_recvcb(&conn, uns_recv);
+    err = espconn_regist_recvcb(&conn, _recv);
     if (err) {
         return err;
     }

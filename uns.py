@@ -38,14 +38,13 @@ class Answer(cli.SubCommand):
     __command__ = 'answer'
     __aliases__ = ['a', 'ans']
     __arguments__ = [
-        cli.Argument('-s', '--services', action='append', default=['u5333']),
         cli.Argument('hostname'),
         cli.Argument('address'),
     ]
 
     def __call__(self, args):
+        answer = args.hostname
         sock = createsocket()
-        answer = f'{args.hostname} {" ".join(args.services)}'
         print(f'Answering {answer} to {args.address}')
         verb = struct.pack('>B', VERB_ANSWER)
         sock.sendto(verb + answer.encode(), TARGET)
