@@ -57,19 +57,30 @@ class Discover(cli.SubCommand):
     __aliases__ = ['d', 's']
     __arguments__ = [
         cli.Argument('hostname'),
+        cli.Argument('-s', '--short', action='store_true'),
         cli.Argument('-w', '--wait', action='store_true',
-                     help='Wait for response')
+                     help='Wait for response'),
     ]
+    
+    def print(self, args, data, host):
+        if args.short:
+            print(host[0])
+        else:
+            print(f'{":".join(map(str, host))}: {data.decode()}')
 
     def __call__(self, args):
         sock = createsocket()
-        print(f'Sending {args.hostname} to {GRP}:{PORT}')
+        if not args.short:
+            print(f'Sending {args.hostname} to {GRP}:{PORT}')
         discover = struct.pack('>B', VERB_DISCOVER)
         sock.sendto(discover + args.hostname.encode(), TARGET)
         if args.wait:
             while True:
                 data, host = sock.recvfrom(256)
-                print(f'{host}: {data.decode()}')
+                self.print(args, data, host)
+        else:
+            data, host = sock.recvfrom(256)
+            self.print(args, data, host)
 
 
 class Read(cli.SubCommand):
