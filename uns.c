@@ -14,7 +14,7 @@
 #define pendings_prev(i) abs((pendings_last - (i)) % UNS_MAX_PENDINGS)
 #define pendings_next(i) abs((pendings_last + (i)) % UNS_MAX_PENDINGS)
 
-
+#define gettime() (system_get_time() / 1000)
 #define MIN(x, y) (x) < (y)? (x): (y)
 
 
@@ -28,6 +28,21 @@ static struct unspending pendings[UNS_MAX_PENDINGS];
 static uint8_t pendings_last;
 
 
+ICACHE_FLASH_ATTR 
+void uns_cleanup() {
+    uint8_t i;
+    struct unspending *p;
+    uint32_t ct = gettime();
+    //os_printf("Cleaning up pending records: %09d.\n", gettime());
+    for (i = 0; i < UNS_MAX_PENDINGS; i++) {
+        p = &pendings[pendings_prev(i)];
+        if ((ct - p->time) > UNS_TIMEOUT) {
+            os_memset(p, 0, sizeof(struct unspending));
+        }
+    }
+}
+
+
 static ICACHE_FLASH_ATTR 
 struct unspending * _pendingfind(const char *name, uint16_t len) {
     uint8_t i;
@@ -38,7 +53,6 @@ struct unspending * _pendingfind(const char *name, uint16_t len) {
         if (p->callback == NULL) {
             continue;
         }
-        os_printf("CMP: %s:%d %s:%d\n", p->pattern, p->patternlen, name, len);
         if (os_strncmp(p->pattern, name, MIN(p->patternlen, len)) == 0) {
             return p;
         }
@@ -71,7 +85,6 @@ struct unsrecord * _cachestore(char *name, uint16_t len,
     os_sprintf(rec->fullname, name, len);
     rec->address.addr = addr->addr;
     cache_last = i;
-    os_printf("Cache stored: %s\n", name);
     return rec; 
 }
 
@@ -80,8 +93,6 @@ static ICACHE_FLASH_ATTR
 void _answer(char *hostname, uint16_t len, remot_info *remoteinfo) {
     hostname[len] = 0;
 
-    os_printf("Answer: %s\n", hostname);
-    
     struct unsrecord *r = _cachefind(hostname, len);
     if (r) {
         os_memcpy(&r->address, remoteinfo->remote_ip, 4);
@@ -94,14 +105,11 @@ void _answer(char *hostname, uint16_t len, remot_info *remoteinfo) {
     while (true) {
         p = _pendingfind(hostname, len); 
         if (p == NULL) {
-            os_printf("Pending not found\n");
             break;
         }
         if (p->callback) {
-            os_printf("Pending found\n");
             p->callback(r);
         }
-        os_printf("Zeroing\n");
         os_memset(p, 0, sizeof(struct unspending));
     }
 }
@@ -128,6 +136,7 @@ err_t uns_discover(const char *pattern, unscallback cb) {
     os_strncpy(p->pattern, pattern, hostnamelen);
     p->patternlen = hostnamelen;
     p->callback = cb;
+    p->time = gettime();
     pendings_last = pindex;
 
     /* Send discover packet */
@@ -135,7 +144,6 @@ err_t uns_discover(const char *pattern, unscallback cb) {
     conn.proto.udp->remote_port = UNS_IGMP_PORT;
     err = espconn_sent(&conn, req, strlen(req));
     if(err) {
-        os_printf("Cannot send UDP: %d\n", err);
         return err;
     }
     return OK; 
@@ -149,7 +157,6 @@ void _req_discover(char *pattern, uint16_t len, remot_info *remoteinfo) {
         return;
     }
 
-    os_printf("%s\n", pattern);
     /* Create Response */
     char resp[UNS_RESPONSE_BUFFER_SIZE];
     os_memset(resp, 0, UNS_RESPONSE_BUFFER_SIZE);
@@ -159,7 +166,6 @@ void _req_discover(char *pattern, uint16_t len, remot_info *remoteinfo) {
     /* Send Back */
     os_memcpy(conn.proto.udp->remote_ip, remoteinfo->remote_ip, 4);
     conn.proto.udp->remote_port = remoteinfo->remote_port;
-    os_printf("Sending: %s to "IPSTR"\n", resp, IP2STR(remoteinfo->remote_ip));
     espconn_sent(&conn, resp, resplen + 1);
 }
 

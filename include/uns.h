@@ -28,6 +28,11 @@
 #define UNS_MAX_PENDINGS    8
 #endif
 
+#ifndef UNS_TIMEOUT
+#define UNS_TIMEOUT         5000
+#endif
+
+
 typedef enum {
     UNS_VERB_DISCOVER = 1,
     UNS_VERB_ANSWER = 2
@@ -46,6 +51,7 @@ typedef void (*unscallback)(struct unsrecord*);
 struct unspending {
     char pattern[UNS_HOSTNAME_MAXLEN];
     uint8_t patternlen;
+    uint32_t time;
     unscallback callback;
 };
 
@@ -55,4 +61,6 @@ err_t uns_init(const char *hostname);
 err_t uns_discover(const char *hostname, unscallback);
 err_t uns_deinit();
 err_t uns_invalidate(const char *hostname);
+void uns_cleanup();
+
 #endif
