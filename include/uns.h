@@ -56,7 +56,6 @@ struct unspending {
 };
 
 
-// TODO: Errors; err_t
 err_t uns_init(const char *hostname);
 err_t uns_discover(const char *hostname, unscallback);
 err_t uns_deinit();
