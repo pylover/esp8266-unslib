@@ -24,6 +24,9 @@
 #define UNS_MAX_HOST_CACHE      8
 #endif
 
+#ifndef UNS_MAX_PENDINGS
+#define UNS_MAX_PENDINGS    8
+#endif
 
 typedef enum {
     UNS_VERB_DISCOVER = 1,
@@ -37,12 +40,19 @@ struct unsrecord {
 };
 
 
-typedef void (*uns_callback)(struct unsrecord*);
+typedef void (*unscallback)(struct unsrecord*);
+
+
+struct unspending {
+    char pattern[UNS_HOSTNAME_MAXLEN];
+    uint8_t patternlen;
+    unscallback callback;
+};
 
 
 // TODO: Errors; err_t
 err_t uns_init(const char *hostname);
-err_t uns_discover(const char *hostname, uns_callback);
+err_t uns_discover(const char *hostname, unscallback);
 err_t uns_deinit();
 err_t uns_invalidate(const char *hostname);
 #endif

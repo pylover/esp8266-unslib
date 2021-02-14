@@ -7,17 +7,44 @@
 #include <espconn.h>
 #include <user_interface.h>
 
+
+#define cache_prev(i) abs((cache_last - (i)) % UNS_MAX_HOST_CACHE)
+#define cache_next(i) abs((cache_last + (i)) % UNS_MAX_HOST_CACHE)
+
+#define pendings_prev(i) abs((pendings_last - (i)) % UNS_MAX_PENDINGS)
+#define pendings_next(i) abs((pendings_last + (i)) % UNS_MAX_PENDINGS)
+
+
+#define MIN(x, y) (x) < (y)? (x): (y)
+
+
 static struct espconn conn;
 static char myhostname[UNS_HOSTNAME_MAXLEN];
 static struct ip_info ipconfig;
 static ip_addr_t igmpaddr;
-static uns_callback callback;
 static struct unsrecord hostcache[UNS_MAX_HOST_CACHE];
-static uint8_t cache_lastindex;
+static uint8_t cache_last;
+static struct unspending pendings[UNS_MAX_PENDINGS];
+static uint8_t pendings_last;
 
 
-#define cache_previtem(i) abs((cache_lastindex - i) % UNS_MAX_HOST_CACHE)
-#define cache_nextitem(i) abs((cache_lastindex + i) % UNS_MAX_HOST_CACHE)
+static ICACHE_FLASH_ATTR 
+struct unspending * _pendingfind(const char *name, uint16_t len) {
+    uint8_t i;
+    struct unspending *p;
+
+    for (i = 0; i < UNS_MAX_PENDINGS; i++) {
+        p = &pendings[pendings_prev(i)];
+        if (p->callback == NULL) {
+            continue;
+        }
+        os_printf("CMP: %s:%d %s:%d\n", p->pattern, p->patternlen, name, len);
+        if (os_strncmp(p->pattern, name, MIN(p->patternlen, len)) == 0) {
+            return p;
+        }
+    }
+    return NULL;
+}
 
 
 static ICACHE_FLASH_ATTR 
@@ -26,7 +53,7 @@ struct unsrecord * _cachefind(const char *name, uint16_t len) {
     uint8_t index;
 
     for (i = 0; i < UNS_MAX_HOST_CACHE; i++) {
-        index = cache_previtem(i);
+        index = cache_prev(i);
         if (os_strncmp(hostcache[i].fullname, name, len)) {
             continue;
         }
@@ -39,9 +66,11 @@ struct unsrecord * _cachefind(const char *name, uint16_t len) {
 static ICACHE_FLASH_ATTR 
 struct unsrecord * _cachestore(char *name, uint16_t len, 
         struct ip_addr* addr) {
-    struct unsrecord *rec = &hostcache[cache_nextitem(1)];
+    uint8_t i = cache_next(1);
+    struct unsrecord *rec = &hostcache[i];
     os_sprintf(rec->fullname, name, len);
     rec->address.addr = addr->addr;
+    cache_last = i;
     os_printf("Cache stored: %s\n", name);
     return rec; 
 }
@@ -56,36 +85,50 @@ void _answer(char *hostname, uint16_t len, remot_info *remoteinfo) {
     struct unsrecord *r = _cachefind(hostname, len);
     if (r) {
         os_memcpy(&r->address, remoteinfo->remote_ip, 4);
-        //r->address.addr = ((ip_addr_t *)remoteinfo->remote_ip)->addr;
     }
     else {
         r = _cachestore(hostname, len, (ip_addr_t *)remoteinfo->remote_ip);
     }
-
-    if (callback) {
-        callback(r);
-        callback = NULL;
+   
+    struct unspending *p; 
+    while (true) {
+        p = _pendingfind(hostname, len); 
+        if (p == NULL) {
+            os_printf("Pending not found\n");
+            break;
+        }
+        if (p->callback) {
+            os_printf("Pending found\n");
+            p->callback(r);
+        }
+        os_printf("Zeroing\n");
+        os_memset(p, 0, sizeof(struct unspending));
     }
 }
 
 
 ICACHE_FLASH_ATTR 
-err_t uns_discover(const char *hostname, uns_callback cb) {
+err_t uns_discover(const char *pattern, unscallback cb) {
     err_t err;
     char req[UNS_REQUEST_BUFFER_SIZE];
     req[0] = UNS_VERB_DISCOVER;
-    int hostnamelen = os_strlen(hostname);
-    os_strcpy(req + 1, hostname);
+    int hostnamelen = os_strlen(pattern);
+    os_strcpy(req + 1, pattern);
     
     /* Try current cache items. */
-    struct unsrecord *r = _cachefind(hostname, hostnamelen);
+    struct unsrecord *r = _cachefind(pattern, hostnamelen);
     if (r) {
         cb(r);
         return;
     }
 
-    /* Update callback pointer, and ignore previous data */
-    callback = cb;
+    /* Item not found in cache, Add a pending item */
+    uint8_t pindex = pendings_next(1);
+    struct unspending *p = &pendings[pindex];
+    os_strncpy(p->pattern, pattern, hostnamelen);
+    p->patternlen = hostnamelen;
+    p->callback = cb;
+    pendings_last = pindex;
 
     /* Send discover packet */
     os_memcpy(conn.proto.udp->remote_ip, &igmpaddr, 4);
