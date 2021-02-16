@@ -38,16 +38,18 @@ class Answer(cli.SubCommand):
     __command__ = 'answer'
     __aliases__ = ['a', 'ans']
     __arguments__ = [
-        cli.Argument('hostname'),
-        cli.Argument('address'),
+        cli.Argument('hostname', default=GRP),
+        cli.Argument('-a', '--address', default=GRP, help=f'Default: {GRP}'),
+        cli.Argument('-p', '--port', default=PORT, type=int,
+                     help=f'Default: {PORT}'),
     ]
 
     def __call__(self, args):
         answer = args.hostname
         sock = createsocket()
-        print(f'Answering {answer} to {args.address}')
         verb = struct.pack('>B', VERB_ANSWER)
-        sock.sendto(verb + answer.encode(), TARGET)
+        print(f'Answering {answer} to {args.address}:{args.port}')
+        sock.sendto(verb + answer.encode(), (args.address, args.port))
 
 
 class Discover(cli.SubCommand):
@@ -61,7 +63,7 @@ class Discover(cli.SubCommand):
         cli.Argument('-w', '--wait', action='store_true',
                      help='Wait for response'),
     ]
-    
+
     def print(self, args, data, host):
         if args.short:
             print(host[0])
