@@ -108,7 +108,7 @@ void _answer(char *hostname, uint16_t len, remot_info *remoteinfo) {
             break;
         }
         if (p->callback) {
-            p->callback(r);
+            p->callback(r, p->arg);
         }
         os_memset(p, 0, sizeof(struct unspending));
     }
@@ -116,7 +116,7 @@ void _answer(char *hostname, uint16_t len, remot_info *remoteinfo) {
 
 
 ICACHE_FLASH_ATTR 
-err_t uns_discover(const char *pattern, unscallback cb) {
+err_t uns_discover(const char *pattern, unscallback cb, void *arg) {
     err_t err;
     char req[UNS_REQUEST_BUFFER_SIZE];
     req[0] = UNS_VERB_DISCOVER;
@@ -126,7 +126,7 @@ err_t uns_discover(const char *pattern, unscallback cb) {
     /* Try current cache items. */
     struct unsrecord *r = _cachefind(pattern, hostnamelen);
     if (r) {
-        cb(r);
+        cb(r, arg);
         return;
     }
 
@@ -136,6 +136,7 @@ err_t uns_discover(const char *pattern, unscallback cb) {
     os_strncpy(p->pattern, pattern, hostnamelen);
     p->patternlen = hostnamelen;
     p->callback = cb;
+    p->arg = arg;
     p->time = gettime();
     pendings_last = pindex;
 

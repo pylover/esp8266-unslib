@@ -45,7 +45,7 @@ struct unsrecord {
 };
 
 
-typedef void (*unscallback)(struct unsrecord*);
+typedef void (*unscallback)(struct unsrecord* rec, void *arg);
 
 
 struct unspending {
@@ -53,11 +53,12 @@ struct unspending {
     uint8_t patternlen;
     uint32_t time;
     unscallback callback;
+    void *arg;
 };
 
 
 err_t uns_init(const char *hostname);
-err_t uns_discover(const char *hostname, unscallback);
+err_t uns_discover(const char *hostname, unscallback, void *arg);
 err_t uns_deinit();
 err_t uns_invalidate(const char *hostname);
 void uns_cleanup();
