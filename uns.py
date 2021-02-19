@@ -1,6 +1,13 @@
 #! /usr/bin/env python3
 # pylama:ignore=D203,D102,D107,E741,D105,E702,D103
-"""UNS utility."""
+"""UNS utility.
+
+uns resolve         r, d
+uns answer          a, ans
+uns sniff           s
+uns find
+uns http            h        uns http home.light set 123
+"""
 
 import re
 import sys
